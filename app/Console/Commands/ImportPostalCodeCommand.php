@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\PostalCode;
 use Illuminate\Console\Command;
 
 class ImportPostalCodeCommand extends Command
@@ -18,7 +19,7 @@ class ImportPostalCodeCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'Import postal-code';
 
     /**
      * Create a new command instance.
@@ -37,6 +38,36 @@ class ImportPostalCodeCommand extends Command
      */
     public function handle()
     {
-        return 0;
+        \App\Models\PostalCode::truncate();
+
+        // CSVファイルの文字コードを変換
+        $csv_path = storage_path('csv/KEN_ALL.CSV');
+        $converted_csv_path = storage_path('app_csv_postral_code_utf8.csv');
+
+        file_put_contents(
+            $converted_csv_path,
+            mb_convert_encoding(
+                file_get_contents($csv_path),
+                'UTF-8',
+                'SJIS-win'
+            )
+        );
+
+        // CSVから郵便データを取得してDBに保存
+        $file = new \SplFileObject($converted_csv_path);
+        $file->setFlags(\SplTempFileObject::READ_CSV);
+
+        foreach ($file as $row) {
+            if (!is_null($row[0])) {
+                
+                \App\Models\PostalCode::create([
+                    'first_code' => intval(substr($row[2], 0, 3)),
+                    'last_code' =>  intval(substr($row[2], 3, 4)),
+                    'prefecture' => $row[6],
+                    'city' =>       $row[7],
+                    'address' =>    (str_contains($row[8], '(')) ? current(explode('(', $row[8])) : $row[8]
+                ]);
+            }
+        }
     }
 }
